@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- Tags Específicas para iOS/Safari (Modo Standalone e Offline) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SP Calc">
+    
+    <!-- Manifest Inline codificado para PWA (permite salvar na tela de início sem arquivos externos) -->
+    <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiU2FmZXR5IFBhcmsgQ2FsYyIsInNob3J0X25hbWUiOiJTUCBDYWxjIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2YzZjRmNiIsInRoZW1lX2NvbG9yIjoiIzAwMDAwMCJ9">
+    
+    <title>Safety Park - Calculadora de Taxa de Ocupação</title>
+    
+    <!-- Tailwind CSS para estilização rápida e responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Fonte Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Configuração de cores da marca Safety Park -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        spBlack: '#000000',
+                        spWhite: '#FFFFFF',
+                        spGray: '#808080',
+                        spRed: '#FF0000',
+                        spGrayLight: '#f3f4f6'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f3f4f6; /* Fundo cinza bem claro para destacar os cards */
+            -webkit-tap-highlight-color: transparent; /* Remove brilho azul de toque padrão do Safari */
+            padding-top: env(safe-area-inset-top); /* Protege contra o Notch/Dynamic Island do iPhone */
+            padding-bottom: env(safe-area-inset-bottom); /* Protege contra a barra de home do iPhone */
+        }
+        
+        /* OBRIGATÓRIO PARA IOS: Previne zoom automático no Safari ao focar em inputs (exige font-size mínimo de 16px) */
+        input[type="number"], select {
+            font-size: 16px !important;
+            -webkit-appearance: none; /* Remove estilos base do Safari */
+            appearance: none;
+        }
+        
+        .card-shadow {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Animação suave para a barra de progresso */
+        .progress-bar-fill {
+            transition: width 1s ease-in-out, background-color 0.5s ease;
+        }
+
+        /* Customização de scrollbar para um visual mais limpo */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #808080; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #000000; 
+        }
+    </style>
+</head>
+<body class="text-spBlack min-h-screen flex flex-col">
+
+    <header class="bg-spBlack text-spWhite shadow-md sticky top-0 z-50">
+        <!-- Banner instrutivo dinâmico para iOS -->
+        <div id="iosPrompt" class="hidden bg-yellow-100 text-yellow-800 text-xs text-center py-2 px-4 border-b border-yellow-200">
+            <i class="fa-brands fa-apple mr-1"></i> Para usar <strong>offline</strong> no pátio, toque em <i class="fa-solid fa-arrow-up-from-bracket mx-1"></i> (Compartilhar) e <strong>"Adicionar à Tela de Início"</strong>.
+        </div>
+        
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-spRed text-spWhite p-2 rounded-lg flex items-center justify-center w-10 h-10">
+                    <i class="fa-solid fa-parking text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold leading-tight">SAFETY PARK</h1>
+                    <p class="text-xs text-spGray">Gestão de Operações</p>
+                </div>
+            </div>
+            <div class="text-sm hidden md:block">
+                <i class="fa-solid fa-calculator mr-2"></i> Calculadora de Ocupação Real
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow container mx-auto px-4 py-8">
+        
+        <!-- Mensagem de erro customizada (Substitui o alert) -->
+        <div id="errorMessage" class="hidden mb-6 bg-spRed bg-opacity-10 border-l-4 border-spRed text-spRed p-4 rounded card-shadow" role="alert">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <p id="errorText" class="font-semibold text-sm"></p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <div class="lg:col-span-7 bg-spWhite rounded-xl p-6 card-shadow border-t-4 border-spBlack">
+                <h2 class="text-2xl font-bold mb-6 text-spBlack border-b border-gray-200 pb-2">
+                    <i class="fa-solid fa-keyboard text-spGray mr-2"></i> Dados do Pátio
+                </h2>
+                
+                <form id="calcForm" class="space-y-5">
+                    
+                    <!-- Seção 1: Capacidade -->
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h3 class="text-sm font-bold text-spGray uppercase tracking-wider mb-3"><i class="fa-solid fa-warehouse mr-1"></i> 1. Capacidade Instalada</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="vagasTotais" class="block text-sm font-semibold mb-1">Vagas Totais Físicas</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <i class="fa-solid fa-car text-spGray"></i>
+                                    </div>
+                                    <input type="number" id="vagasTotais" min="1" placeholder="Ex: 150" class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-spRed focus:border-transparent transition-all">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="cargaHoraria" class="block text-sm font-semibold mb-1">Horas de Operação / Dia</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <i class="fa-solid fa-clock text-spGray"></i>
+                                    </div>
+                                    <input type="number" id="cargaHoraria" min="1" max="24" placeholder="Ex: 12 ou 24" class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-spRed focus:border-transparent transition-all">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seção 2: Período -->
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h3 class="text-sm font-bold text-spGray uppercase tracking-wider mb-3"><i class="fa-solid fa-calendar-days mr-1"></i> 2. Recorte de Tempo</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="periodo" class="block text-sm font-semibold mb-1">Período de Análise</label>
+                                <div class="relative">
+                                    <select id="periodo" onchange="atualizarDiasTrabalhados()" class="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-spRed focus:border-transparent transition-all appearance-none bg-white">
+                                        <option value="dia">Diário</option>
+                                        <option value="semana">Semanal</option>
+                                        <option value="mes">Mensal</option>
+                                    </select>
+                                    <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                        <i class="fa-solid fa-chevron-down text-spGray text-sm"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="diasTrabalhados" class="block text-sm font-semibold mb-1">Dias Trabalhados no Período</label>
+                                <div class="relative">
+                                    <input type="number" id="diasTrabalhados" min="1" max="31" value="1" class="w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-spRed focus:border-transparent transition-all">
+                                </div>
+                                <p class="text-xs text-spGray mt-1">Ajuste se o pátio não abrir domingo, ex.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seção 3: Dados Financeiros -->
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h3 class="text-sm font-bold text-spGray uppercase tracking-wider mb-3"><i class="fa-solid fa-money-bill-wave mr-1"></i> 3. Dados Financeiros (Demanda Real)</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="receitaTotal" class="block text-sm font-semibold mb-1">Receita Total do Rotativo (R$)</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <i class="fa-solid fa-sack-dollar text-spGray"></i>
+                                    </div>
+                                    <input type="number" id="receitaTotal" min="0" step="0.01" placeholder="Ex: 2500.50" class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-spRed focus:border-transparent transition-all">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="tarifaHora" class="block text-sm font-semibold mb-1">Valor da Tarifa de 60 min (R$)</label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <i class="fa-solid fa-tag text-spGray"></i>
+                                    </div>
+                                    <input type="number" id="tarifaHora" min="0.01" step="0.01" placeholder="Ex: 15.00" class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-spRed focus:border-transparent transition-all">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" onclick="calcularOcupacao()" class="w-full bg-spRed hover:bg-red-700 text-spWhite font-bold py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-gears"></i> Processar Cálculo
+                    </button>
+                </form>
+            </div>
+
+            <div class="lg:col-span-5 flex flex-col gap-6">
+                
+                <!-- Card Principal: Ocupação -->
+                <div class="bg-spBlack text-spWhite rounded-xl p-6 card-shadow flex flex-col items-center justify-center relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-spGray opacity-10 rounded-full -mr-10 -mt-10"></div>
+                    
+                    <h3 class="text-spGray uppercase tracking-widest text-sm font-bold mb-2">Taxa de Ocupação</h3>
+                    <div class="text-6xl font-bold mb-2" id="resultadoPercentual">--%</div>
+                    
+                    <!-- Barra de progresso visual -->
+                    <div class="w-full bg-gray-800 rounded-full h-4 mb-2 mt-4 overflow-hidden border border-gray-700">
+                        <div id="barraProgresso" class="bg-spGray h-4 rounded-full progress-bar-fill" style="width: 0%"></div>
+                    </div>
+                    
+                    <div id="statusOcupacao" class="text-sm font-semibold mt-2 px-3 py-1 rounded-full bg-gray-800 text-gray-300">
+                        Aguardando dados...
+                    </div>
+                </div>
+
+                <!-- Cards Secundários: Detalhamento -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-spWhite p-4 rounded-xl card-shadow border border-gray-100 flex flex-col items-center text-center">
+                        <div class="bg-gray-100 p-2 rounded-full mb-2">
+                            <i class="fa-solid fa-battery-full text-spBlack text-xl"></i>
+                        </div>
+                        <p class="text-xs text-spGray font-semibold uppercase">Capacidade Total</p>
+                        <p class="text-xl font-bold text-spBlack" id="resCapacidadeTotal">--</p>
+                        <p class="text-[10px] text-spGray mt-1">vagas-hora disponíveis</p>
+                    </div>
+                    
+                    <div class="bg-spWhite p-4 rounded-xl card-shadow border border-gray-100 flex flex-col items-center text-center">
+                        <div class="bg-gray-100 p-2 rounded-full mb-2">
+                            <i class="fa-solid fa-battery-quarter text-spRed text-xl"></i>
+                        </div>
+                        <p class="text-xs text-spGray font-semibold uppercase">Capacidade Utilizada</p>
+                        <p class="text-xl font-bold text-spBlack" id="resCapacidadeUsada">--</p>
+                        <p class="text-[10px] text-spGray mt-1">vagas-hora consumidas</p>
+                    </div>
+                </div>
+
+                <!-- Card de Dica Operacional -->
+                <div class="bg-spWhite p-5 rounded-xl card-shadow border-l-4 border-spGray text-sm">
+                    <h4 class="font-bold mb-2 flex items-center gap-2 text-spBlack">
+                        <i class="fa-solid fa-lightbulb text-yellow-500"></i> Insight Operacional
+                    </h4>
+                    <p id="insightTexto" class="text-gray-600 leading-relaxed">
+                        Preencha os dados ao lado para receber uma análise automática sobre a eficiência do seu pátio.
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-spWhite border-t border-gray-200 mt-auto py-4">
+        <div class="container mx-auto px-4 text-center text-xs text-spGray">
+            <p><strong>SAFETY PARK</strong> &copy; 2026 - Departamento de Operações.</p>
+            <p>Uso exclusivo para Encarregados e Gerentes de Pátio.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Detectar dispositivo iOS Safari para mostrar o aviso de instalação Offline
+        const isIos = () => {
+            const userAgent = window.navigator.userAgent.toLowerCase();
+            return /iphone|ipad|ipod/.test(userAgent);
+        };
+        
+        // Detectar se já está rodando como app de Tela de Início (Standalone)
+        const isStandalone = () => {
+            return ('standalone' in window.navigator) && (window.navigator.standalone);
+        };
+
+        // Inicializador de tela
+        window.addEventListener('DOMContentLoaded', () => {
+            // Se for iPhone e não estiver como App na tela inicial, avise o líder
+            if (isIos() && !isStandalone()) {
+                document.getElementById('iosPrompt').classList.remove('hidden');
+            }
+        });
+
+        // Função para preencher automaticamente os dias baseados no período selecionado
+        function atualizarDiasTrabalhados() {
+            const periodo = document.getElementById('periodo').value;
+            const inputDias = document.getElementById('diasTrabalhados');
+            
+            if (periodo === 'dia') {
+                inputDias.value = 1;
+            } else if (periodo === 'semana') {
+                inputDias.value = 7; // Sugestão padrão, encarregado pode mudar para 6
+            } else if (periodo === 'mes') {
+                inputDias.value = 30; // Sugestão padrão
+            }
+        }
+
+        // Função para exibir erros na UI sem usar alert()
+        function mostrarErro(mensagem) {
+            const errorDiv = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            
+            errorText.innerText = mensagem;
+            errorDiv.classList.remove('hidden');
+            
+            // Rola a tela para o topo suavemente para ver o erro
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // Esconde o erro após 5 segundos
+            setTimeout(() => {
+                errorDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Função principal de cálculo
+        function calcularOcupacao() {
+            // Coletar valores
+            const vagas = parseFloat(document.getElementById('vagasTotais').value);
+            const cargaHoraria = parseFloat(document.getElementById('cargaHoraria').value);
+            const dias = parseFloat(document.getElementById('diasTrabalhados').value);
+            const receitaTotal = parseFloat(document.getElementById('receitaTotal').value);
+            const tarifaHora = parseFloat(document.getElementById('tarifaHora').value);
+
+            // Validação de segurança
+            if (isNaN(vagas) || isNaN(cargaHoraria) || isNaN(dias) || isNaN(receitaTotal) || isNaN(tarifaHora) ||
+                vagas <= 0 || cargaHoraria <= 0 || dias <= 0 || receitaTotal < 0 || tarifaHora <= 0) {
+                mostrarErro("Atenção Encarregado: Todos os campos precisam ser preenchidos. A tarifa e a capacidade devem ser maiores que zero.");
+                return;
+            }
+
+            if (cargaHoraria > 24) {
+                mostrarErro("A carga horária diária não pode ultrapassar 24 horas.");
+                return;
+            }
+
+            // Oculta erro caso exista
+            document.getElementById('errorMessage').classList.add('hidden');
+
+            // CÁLCULO CORE OPERACIONAL SAFETY PARK (BASE FINANCEIRA)
+            // 1. Capacidade Total (Vagas Disponíveis em Horas no período)
+            const capacidadeTotalHoras = vagas * cargaHoraria * dias;
+
+            // 2. Capacidade Utilizada (Horas consumidas baseadas na receita validada)
+            // Lógica: Receita Total / Valor da Tarifa (1h) = Horas Vendidas (Ocupação Real)
+            const capacidadeUtilizadaHoras = receitaTotal / tarifaHora;
+
+            // 3. Taxa de Ocupação (%)
+            let taxaOcupacao = (capacidadeUtilizadaHoras / capacidadeTotalHoras) * 100;
+            
+            // Trava de coerência
+            const superlotação = taxaOcupacao > 100;
+
+            // Atualização do DOM com os resultados
+            document.getElementById('resultadoPercentual').innerText = taxaOcupacao.toFixed(1) + '%';
+            
+            // Formatação de números grandes para melhor leitura BR
+            const formataNumero = (num) => num.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+            
+            document.getElementById('resCapacidadeTotal').innerText = formataNumero(capacidadeTotalHoras);
+            document.getElementById('resCapacidadeUsada').innerText = formataNumero(capacidadeUtilizadaHoras);
+
+            // Atualização visual da Barra de Progresso e Status
+            const barra = document.getElementById('barraProgresso');
+            const statusBox = document.getElementById('statusOcupacao');
+            const insightTexto = document.getElementById('insightTexto');
+            
+            // Limita a barra visual a 100% mesmo se passar
+            barra.style.width = Math.min(taxaOcupacao, 100) + '%';
+
+            // Lógica de Cores Corporativas e Insights baseados no resultado financeiro
+            if (taxaOcupacao < 40) {
+                barra.style.backgroundColor = '#808080'; // Cinza (Baixa)
+                statusBox.className = 'text-sm font-semibold mt-2 px-3 py-1 rounded-full bg-gray-200 text-spBlack';
+                statusBox.innerHTML = '<i class="fa-solid fa-arrow-trend-down mr-1"></i> Ocupação Baixa';
+                insightTexto.innerHTML = `<strong>Atenção à ociosidade financeira!</strong> Sua receita rotativa está cobrindo pouca capacidade. Recomendado revisar estratégia de preço, abrir cards no <strong>Pipefy</strong> para prospecção de mensalistas ou realizar promoções de longo período.`;
+            } else if (taxaOcupacao >= 40 && taxaOcupacao <= 85) {
+                barra.style.backgroundColor = '#FFFFFF'; // Branco/Contraste sobre fundo preto (Ideal)
+                statusBox.className = 'text-sm font-semibold mt-2 px-3 py-1 rounded-full bg-spWhite text-spBlack';
+                statusBox.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Ocupação Saudável';
+                insightTexto.innerHTML = `<strong>Operação equilibrada.</strong> O pátio está gerando horas vendidas dentro da normalidade de manobra. Mantenha os controles de pátio e audite se as isenções de tickets não estão subnotificadas.`;
+            } else {
+                barra.style.backgroundColor = '#FF0000'; // Vermelho (Crítico/Superlotação)
+                statusBox.className = 'text-sm font-semibold mt-2 px-3 py-1 rounded-full bg-spRed text-spWhite';
+                
+                if (superlotação) {
+                    statusBox.innerHTML = '<i class="fa-solid fa-fire mr-1"></i> Distorção/Superlotação (>100%)';
+                    insightTexto.innerHTML = `<strong>Risco ou Distorção Detectada!</strong> Horas vendidas maiores que vagas físicas. Isso indica: 1) Alto volume de frações curtas pagas como hora cheia; 2) Cobrança de "tickets perdidos" inflando a receita; ou 3) Uso de corredores para estacionar. Analise as câmeras (CFTV).`;
+                } else {
+                    statusBox.innerHTML = '<i class="fa-solid fa-arrow-trend-up mr-1"></i> Ocupação Alta';
+                    insightTexto.innerHTML = `<strong>Alta rentabilidade.</strong> Excelente faturamento, porém o pátio está próximo do esgotamento físico. Acompanhe os alertas de fadiga da equipe no <strong>Ahgora</strong> devido ao alto volume de manobras de valets.`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
